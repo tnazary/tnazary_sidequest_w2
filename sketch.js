@@ -33,7 +33,14 @@ let blob3 = {
   // Friction
   frictionAir: 0.995, // Light friction in air
   frictionGround: 0.88, // Stronger friction on ground
+
+  // Emotion state (added)
+  angry: false,
+  angerTimer: 0,
 };
+
+// Frames required to be pinned before anger triggers (added)
+const ANGER_DELAY = 6;
 
 // List of solid platforms the blob can stand on
 // Each platform is an axis-aligned rectangle (AABB)
@@ -84,6 +91,11 @@ function draw() {
   // --- Apply gravity ---
   blob3.vy += blob3.gravity;
 
+  // Extra jitter when angry (added)
+  if (blob3.angry) {
+    blob3.vx += random(-0.3, 0.3);
+  }
+
   // --- Collision representation ---
   // We collide using a rectangle (AABB),
   // even though the blob is drawn as a circle
@@ -94,6 +106,10 @@ function draw() {
     h: blob3.r * 2,
   };
 
+  // Track whether the blob is pinned (added)
+  let pinnedX = false;
+  let pinnedY = false;
+
   // --- STEP 1: Move horizontally, then resolve X collisions ---
   box.x += blob3.vx;
   for (const s of platforms) {
@@ -101,9 +117,11 @@ function draw() {
       if (blob3.vx > 0) {
         // Moving right → hit the left side of a platform
         box.x = s.x - box.w;
+        pinnedX = true;
       } else if (blob3.vx < 0) {
         // Moving left → hit the right side of a platform
         box.x = s.x + s.w;
+        pinnedX = true;
       }
       blob3.vx = 0;
     }
@@ -124,6 +142,7 @@ function draw() {
         // Rising → hit the underside of a platform
         box.y = s.y + s.h;
         blob3.vy = 0;
+        pinnedY = true;
       }
     }
   }
@@ -132,8 +151,22 @@ function draw() {
   blob3.x = box.x + box.w / 2;
   blob3.y = box.y + box.h / 2;
 
+  // --- Detect pinning against canvas edges (added) ---
+  if (blob3.x - blob3.r <= 0 && blob3.vx < 0) pinnedX = true;
+  if (blob3.x + blob3.r >= width && blob3.vx > 0) pinnedX = true;
+  if (blob3.y - blob3.r <= 0 && blob3.vy < 0) pinnedY = true;
+  if (blob3.y + blob3.r >= height && blob3.vy > 0) pinnedY = true;
+
   // Keep blob inside the canvas horizontally
   blob3.x = constrain(blob3.x, blob3.r, width - blob3.r);
+
+  // Anger logic (added)
+  if ((pinnedX || pinnedY) && (abs(blob3.vx) > 0.1 || abs(blob3.vy) > 0.1)) {
+    blob3.angerTimer++;
+  } else {
+    blob3.angerTimer = 0;
+  }
+  blob3.angry = blob3.angerTimer > ANGER_DELAY;
 
   // --- Draw the animated blob ---
   blob3.t += blob3.tSpeed;
@@ -154,7 +187,15 @@ function overlap(a, b) {
 
 // Draws the blob using Perlin noise for a soft, breathing effect
 function drawBlobCircle(b) {
-  fill(20, 120, 255);
+  push();
+
+  if (b.angry) {
+    fill(220, 40, 40);
+    translate(random(-2, 2), random(-2, 2));
+  } else {
+    fill(20, 120, 255);
+  }
+
   beginShape();
 
   for (let i = 0; i < b.points; i++) {
@@ -173,6 +214,7 @@ function drawBlobCircle(b) {
   }
 
   endShape(CLOSE);
+  pop();
 }
 
 // Jump input (only allowed when grounded)
